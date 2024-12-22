@@ -76,12 +76,10 @@ export class Messages extends MessagesBase {
   }
 
   private scrollToLastExchange() {
-    const lastUserMessageIndex = this.messageElementRefs.findIndex(
-      (message) => message.bubbleElement.classList.contains('user-message')
-    );
-    const lastAIMessageIndex = this.messageElementRefs.findIndex(
-      (message) => message.bubbleElement.classList.contains('ai-message')
-    );
+    const lastUserMessageIndex = this.messageElementRefs.reduce((lastIndex, message, index) =>
+      message.bubbleElement.classList.contains('user-message') ? index : lastIndex, -1);
+    const lastAIMessageIndex = this.messageElementRefs.reduce((lastIndex, message, index) =>
+      message.bubbleElement.classList.contains('ai-message') ? index : lastIndex, -1);
 
     if (lastUserMessageIndex !== -1 && lastAIMessageIndex !== -1) {
       const lastUserMessage = this.messageElementRefs[lastUserMessageIndex].outerContainer;
