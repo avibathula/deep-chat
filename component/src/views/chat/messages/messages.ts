@@ -75,6 +75,22 @@ export class Messages extends MessagesBase {
     }
   }
 
+  private scrollToLastExchange() {
+    const lastUserMessageIndex = this.messageElementRefs.findIndex(
+      (message) => message.bubbleElement.classList.contains('user-message')
+    );
+    const lastAIMessageIndex = this.messageElementRefs.findIndex(
+      (message) => message.bubbleElement.classList.contains('ai-message')
+    );
+
+    if (lastUserMessageIndex !== -1 && lastAIMessageIndex !== -1) {
+      const lastUserMessage = this.messageElementRefs[lastUserMessageIndex].outerContainer;
+      const lastAIMessage = this.messageElementRefs[lastAIMessageIndex].outerContainer;
+      const totalHeight = lastUserMessage.offsetHeight + lastAIMessage.offsetHeight;
+      this.elementRef.scrollTop = lastUserMessage.offsetTop - (this.elementRef.clientHeight - totalHeight) / 2;
+    }
+  }
+
   private static getDisplayLoadingMessage(deepChat: DeepChat, serviceIO: ServiceIO) {
     if (serviceIO.websocket) return false;
     return deepChat.displayLoadingBubble ?? true;
@@ -151,6 +167,7 @@ export class Messages extends MessagesBase {
     if (message.style) {
       Object.assign(elements.bubbleElement.style, message.style);
     }
+    this.scrollToLastExchange();
     return elements;
   }
 
