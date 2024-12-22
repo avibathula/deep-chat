@@ -147,30 +147,45 @@ export class Messages extends MessagesBase {
     if (message.error) {
       return this.addNewErrorMessage('service', message.error);
     }
-    return this.addNewMessage(message, isHistory, isTop);
+    const elements = this.addNewMessage(message, isHistory, isTop);
+    if (message.style) {
+      Object.assign(elements.bubbleElement.style, message.style);
+    }
+    return elements;
   }
 
   // this should not be activated by streamed messages
   public addNewMessage(data: ResponseI, isHistory = false, isTop = false) {
     const message = Messages.createMessageContent(data);
     const overwrite: Overwrite = {status: data.overwrite}; // if did not overwrite, create a new message
+    let elements: MessageElements | undefined;
+
     if (!data.ignoreText && message.text !== undefined && data.text !== null) {
-      this.addNewTextMessage(message.text, message.role, overwrite, isTop);
+      elements = this.addNewTextMessage(message.text, message.role, overwrite, isTop);
       if (!isHistory && this.textToSpeech && message.role !== MessageUtils.USER_ROLE) {
         TextToSpeech.speak(message.text, this.textToSpeech);
       }
     }
+
     if (message.files && Array.isArray(message.files)) {
       FileMessages.addMessages(this, message.files, message.role, isTop);
     }
+
     if (message.html !== undefined && message.html !== null) {
-      const elements = HTMLMessages.add(this, message.html, message.role, this.messageElementRefs, overwrite, isTop);
+      elements = HTMLMessages.add(this, message.html, message.role, this.messageElementRefs, overwrite, isTop);
       if (HTMLDeepChatElements.isElementTemporary(elements)) delete message.html;
     }
+
     if (this.isValidMessageContent(message) && !isTop) {
       this.updateStateOnMessage(message, data.overwrite, data.sendUpdate, isHistory);
     }
-    return message;
+
+    // Ensure elements is not undefined and includes bubbleElement
+    if (elements) {
+      return { message, bubbleElement: elements.bubbleElement };
+    }
+
+    return { message, bubbleElement: null }; // Or handle undefined case as needed
   }
 
   private isValidMessageContent(messageContent: MessageContentI) {
