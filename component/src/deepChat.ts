@@ -15,8 +15,9 @@ import {ValidationHandler} from './types/validationHandler';
 import {GoogleFont} from './utils/webComponent/googleFont';
 import {DirectConnection} from './types/directConnection';
 import {TextToSpeechConfig} from './types/textToSpeech';
-import {MessageBody} from './types/messagesInternal';
 import {SpeechToTextConfig} from './types/microphone';
+import {RemarkableOptions} from './types/remarkable';
+import {MessageBody} from './types/messagesInternal';
 import {ErrorMessages, OnError} from './types/error';
 import {RequestBodyLimits} from './types/chatLimits';
 import {Property} from './utils/decorators/property';
@@ -30,6 +31,7 @@ import {ServiceIO} from './services/serviceIO';
 import {Legacy} from './utils/legacy/legacy';
 import {TextInput} from './types/textInput';
 import {LoadHistory} from './types/history';
+import {FocusMode} from './types/focusMode';
 import {CustomStyle} from './types/styles';
 import {Response} from './types/response';
 import style from './deepChat.css?inline';
@@ -140,6 +142,12 @@ export class DeepChat extends InternalHTML {
   @Property('object')
   htmlClassUtilities?: HTMLClassUtilities;
 
+  @Property('object')
+  remarkable?: RemarkableOptions;
+
+  @Property('boolean')
+  focusMode?: FocusMode;
+
   getMessages: () => MessageContent[] = () => [];
 
   submitUserMessage: (content: UserContent) => void = () =>
@@ -148,13 +156,13 @@ export class DeepChat extends InternalHTML {
   addMessage: (message: Response, isUpdate?: boolean) => void = () =>
     console.warn('addMessage failed - please wait for chat view to render before calling this property.');
 
-  focusInput: () => void = () => FocusUtils.focusFromParentElement(this._elementRef);
-
-  refreshMessages: () => void = () => {};
+  updateMessage: (messageBody: MessageBody, index: number) => void = () => {};
 
   clearMessages: (isReset?: boolean) => void = () => {};
 
-  changeMessage: (index: number, messageBody: MessageBody) => void = () => {};
+  focusInput: () => void = () => FocusUtils.focusFromParentElement(this._elementRef);
+
+  refreshMessages: () => void = () => {};
 
   scrollToBottom: () => void = () => {};
 

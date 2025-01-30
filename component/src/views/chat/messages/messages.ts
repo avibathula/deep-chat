@@ -1,27 +1,30 @@
-import {MessageContentI, Overwrite} from '../../../types/messagesInternal';
+import {MessageBody, MessageContentI, Overwrite} from '../../../types/messagesInternal';
 import {MessageFile, MessageFileType} from '../../../types/messageFile';
 import {CustomErrors, ServiceIO} from '../../../services/serviceIO';
 import {LoadingStyle} from '../../../utils/loading/loadingStyle';
 import {HTMLDeepChatElements} from './html/htmlDeepChatElements';
 import {ElementUtils} from '../../../utils/element/elementUtils';
 import {FireEvents} from '../../../utils/events/fireEvents';
+import {MessageStyleUtils} from './utils/messageStyleUtils';
 import {ErrorMessageOverrides} from '../../../types/error';
 import {ResponseI} from '../../../types/responseInternal';
+import {FileMessageUtils} from './utils/fileMessageUtils';
 import {TextToSpeech} from './textToSpeech/textToSpeech';
 import {LoadingHistory} from './history/loadingHistory';
 import {ErrorResp} from '../../../types/errorInternal';
 import {Demo, DemoResponse} from '../../../types/demo';
-import {MessageStyleUtils} from './messageStyleUtils';
 import {IntroMessage} from '../../../types/messages';
 import {MessageStream} from './stream/messageStream';
 import {IntroPanel} from '../introPanel/introPanel';
-import {FileMessageUtils} from './fileMessageUtils';
 import {WebModel} from '../../../webModel/webModel';
+import {UpdateMessage} from './utils/updateMessage';
+import {Legacy} from '../../../utils/legacy/legacy';
+import {LoadHistory} from '../../../types/history';
 import {CustomStyle} from '../../../types/styles';
+import {MessageUtils} from './utils/messageUtils';
 import {HTMLMessages} from './html/htmlMessages';
 import {SetupMessages} from './setupMessages';
 import {FileMessages} from './fileMessages';
-import {MessageUtils} from './messageUtils';
 import {MessagesBase} from './messagesBase';
 import {DeepChat} from '../../../deepChat';
 import {HTMLUtils} from './html/htmlUtils';
@@ -55,19 +58,19 @@ export class Messages extends MessagesBase {
     if (!this.addSetupMessageIfNeeded(deepChat, serviceIO)) {
       this.populateIntroPanel(panel, introPanelMarkUp, deepChat.introPanelStyle);
     }
+    if (demo) this.prepareDemo(Legacy.processDemo(demo), deepChat.loadHistory); // before intro/history for loading spinner
     this.addIntroductoryMessages(deepChat, serviceIO);
     new History(deepChat, this, serviceIO);
     this._displayServiceErrorMessages = deepChat.errorMessages?.displayServiceErrorMessages;
     deepChat.getMessages = () => JSON.parse(JSON.stringify(this.messageToElements.map(([msg]) => msg)));
     deepChat.clearMessages = this.clearMessages.bind(this, serviceIO);
-    deepChat.refreshMessages = this.refreshTextMessages.bind(this);
+    deepChat.refreshMessages = this.refreshTextMessages.bind(this, deepChat.remarkable);
     deepChat.scrollToBottom = ElementUtils.scrollToBottom.bind(this, this.elementRef);
     deepChat.addMessage = (message: ResponseI, isUpdate?: boolean) => {
       this.addAnyMessage({...message, sendUpdate: !!isUpdate}, !isUpdate);
     };
-    // interface - setUpMessagesForService
+    deepChat.updateMessage = (messageBody: MessageBody, index: number) => UpdateMessage.update(this, messageBody, index);
     if (serviceIO.isWebModel()) (serviceIO as WebModel).setUpMessages(this);
-    if (demo) this.prepareDemo(demo);
     if (deepChat.textToSpeech) {
       TextToSpeech.processConfig(deepChat.textToSpeech, (processedConfig) => {
         this.textToSpeech = processedConfig;
@@ -94,22 +97,25 @@ export class Messages extends MessagesBase {
     return deepChat.displayLoadingBubble ?? true;
   }
 
-  private prepareDemo(demo: Demo) {
+  private prepareDemo(demo: Demo, loadHistory?: LoadHistory): void {
     if (typeof demo === 'object') {
-      if (demo.response) this.customDemoResponse = demo.response;
+      if (!loadHistory && demo.displayLoading) {
+        const {history} = demo.displayLoading;
+        if (history?.small) LoadingHistory.addMessage(this, false);
+        if (history?.full) LoadingHistory.addMessage(this);
+      }
       if (demo.displayErrors) {
         if (demo.displayErrors.default) this.addNewErrorMessage('' as 'service', '');
         if (demo.displayErrors.service) this.addNewErrorMessage('service', '');
         if (demo.displayErrors.speechToText) this.addNewErrorMessage('speechToText', '');
       }
-      if (demo.displayLoadingBubble) {
-        this.addLoadingMessage();
-      }
+      // needs to be here for message loading bubble to not disappear after error
+      if (demo.displayLoading?.message) this.addLoadingMessage();
+      if (demo.response) this.customDemoResponse = demo.response;
     }
   }
 
   private addSetupMessageIfNeeded(deepChat: DeepChat, serviceIO: ServiceIO) {
-    // interface - getSetUpMessage
     const text = SetupMessages.getText(deepChat, serviceIO);
     if (text) {
       const elements = this.createAndAppendNewMessageElement(text, MessageUtils.AI_ROLE);
@@ -122,21 +128,21 @@ export class Messages extends MessagesBase {
   private addIntroductoryMessages(deepChat?: DeepChat, serviceIO?: ServiceIO) {
     if (deepChat?.shadowRoot) this._introMessage = deepChat.introMessage;
     let introMessage = this._introMessage;
-    // interface - introMessage
     if (serviceIO?.isWebModel()) introMessage ??= (serviceIO as WebModel).getIntroMessage(introMessage);
+    const shouldHide = !deepChat?.history && !!(deepChat?.loadHistory || serviceIO?.fetchHistory);
     if (introMessage) {
       if (Array.isArray(introMessage)) {
         introMessage.forEach((intro, index) => {
           if (index !== 0) MessageUtils.hideRoleElements(this.messageElementRefs, !!this._avatars, !!this._names);
-          this.addIntroductoryMessage(intro);
+          this.addIntroductoryMessage(intro, shouldHide);
         });
       } else {
-        this.addIntroductoryMessage(introMessage);
+        this.addIntroductoryMessage(introMessage, shouldHide);
       }
     }
   }
 
-  private addIntroductoryMessage(introMessage: IntroMessage) {
+  private addIntroductoryMessage(introMessage: IntroMessage, shouldHide: boolean) {
     let elements;
     if (introMessage?.text) {
       elements = this.createAndAppendNewMessageElement(introMessage.text, MessageUtils.AI_ROLE);
@@ -145,13 +151,15 @@ export class Messages extends MessagesBase {
     }
     if (elements) {
       this.applyCustomStyles(elements, MessageUtils.AI_ROLE, false, this.messageStyles?.intro);
-      elements.outerContainer.classList.add('deep-chat-intro');
+      elements.outerContainer.classList.add(MessagesBase.INTRO_CLASS);
+      if (shouldHide) elements.outerContainer.style.display = 'none';
     }
+    return elements;
   }
 
   public removeIntroductoryMessage() {
     const introMessage = this.messageElementRefs[0];
-    if (introMessage.outerContainer.classList.contains('deep-chat-intro')) {
+    if (introMessage.outerContainer.classList.contains(MessagesBase.INTRO_CLASS)) {
       introMessage.outerContainer.remove();
       this.messageElementRefs.shift();
     }
@@ -239,7 +247,7 @@ export class Messages extends MessagesBase {
       this.messageStyles?.default);
     MessageStyleUtils.applyCustomStylesToElements(messageElements, false, fontElementStyles);
     MessageStyleUtils.applyCustomStylesToElements(messageElements, false, this.messageStyles?.error);
-    if (!isTop) this.elementRef.appendChild(outerContainer);
+    if (!isTop) this.appendOuterContainerElemet(outerContainer);
     if (this.textToSpeech) TextToSpeech.speak(text, this.textToSpeech);
     this._onError?.(text);
   }
@@ -305,10 +313,10 @@ export class Messages extends MessagesBase {
     const messageElements = html
       ? HTMLMessages.createElements(this, html, MessageUtils.AI_ROLE, false)
       : this.addDefaultLoadingMessage();
-    this.elementRef.appendChild(messageElements.outerContainer);
+    this.appendOuterContainerElemet(messageElements.outerContainer);
     messageElements.bubbleElement.classList.add(LoadingStyle.BUBBLE_CLASS);
     this.applyCustomStyles(messageElements, MessageUtils.AI_ROLE, false, this.messageStyles?.loading?.message?.styles);
-    ElementUtils.scrollToBottom(this.elementRef);
+    if (!this.focusMode) ElementUtils.scrollToBottom(this.elementRef);
   }
 
   private populateIntroPanel(childElement?: HTMLElement, introPanelMarkUp?: string, introPanelStyle?: CustomStyle) {
@@ -340,7 +348,8 @@ export class Messages extends MessagesBase {
     );
   }
 
-  private static isActiveElement(bubbleClasslist: DOMTokenList) {
+  public static isActiveElement(bubbleClasslist?: DOMTokenList) {
+    if (!bubbleClasslist) return false;
     return (
       bubbleClasslist.contains(LoadingStyle.BUBBLE_CLASS) ||
       bubbleClasslist.contains(LoadingHistory.CLASS) ||

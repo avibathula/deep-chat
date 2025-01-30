@@ -1,7 +1,7 @@
-import {MessageFile, MessageFileType} from '../../../types/messageFile';
-import {MessageContent, MessageStyles} from '../../../types/messages';
-import {MessagesBase} from './messagesBase';
-import {MessageElements} from './messages';
+import {MessageFile, MessageFileType} from '../../../../types/messageFile';
+import {MessageContent, MessageStyles} from '../../../../types/messages';
+import {MessagesBase} from '../messagesBase';
+import {MessageElements} from '../messages';
 
 export class FileMessageUtils {
   public static readonly DEFAULT_FILE_NAME = 'file';
@@ -20,8 +20,8 @@ export class FileMessageUtils {
       messages: MessagesBase, elements: MessageElements, styles: keyof MessageStyles, role: string, isTop: boolean) {
     FileMessageUtils.setElementProps(messages, elements, styles, role);
     if (!isTop) {
-      messages.elementRef.appendChild(elements.outerContainer);
-      messages.elementRef.scrollTop = messages.elementRef.scrollHeight;
+      messages.appendOuterContainerElemet(elements.outerContainer);
+      if (!messages.focusMode) messages.elementRef.scrollTop = messages.elementRef.scrollHeight;
     }
   }
 
